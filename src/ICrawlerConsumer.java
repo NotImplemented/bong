@@ -1,4 +1,5 @@
+@FunctionalInterface
 public interface ICrawlerConsumer {
 
-    public void OnPageDownload(String url, String contents);
+    public void onPageDownload(Crawler crawler, String url, String contents);
 }
