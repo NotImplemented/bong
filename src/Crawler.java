@@ -2,6 +2,7 @@ import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.util.ArrayList;
 import java.util.Queue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -11,9 +12,9 @@ import java.util.concurrent.atomic.AtomicReference;
 
 public class Crawler {
 
-    public BlockingQueue<String> queue = new LinkedBlockingQueue<>();
-    public AtomicReference<Thread> t = null;
-    //public
+    private BlockingQueue<String> queue = new LinkedBlockingQueue<>();
+    private AtomicReference<Thread> t = new AtomicReference<>();
+    private ArrayList<ICrawlerConsumer> consumers = new ArrayList<>();
 
     public void start() {
 
@@ -35,10 +36,15 @@ public class Crawler {
 
                 if (result.length() > 0) {
 
+                    for(ICrawlerConsumer consumer : consumers)
+                        consumer.onPageDownload(this, url, result);
                 }
-
             }
             catch (InterruptedException e) {
+
+                break;
+            }
+            catch (Exception e) {
 
                 e.printStackTrace();
                 break;
@@ -75,13 +81,13 @@ public class Crawler {
             }
             catch (MalformedURLException e) {
 
-                e.printStackTrace();
+                //e.printStackTrace();
             }
             catch (IOException e) {
 
-                e.printStackTrace();
+                //e.printStackTrace();
+                // Suppress this from flooding console.
             }
-
 
             break;
         }
@@ -92,7 +98,7 @@ public class Crawler {
         try {
 
             InputStream input = connection.getInputStream();
-            StringBuilder builder = new StringBuilder();
+            StringBuffer builder = new StringBuffer();
 
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(input))) {
                 String line = "";
@@ -101,8 +107,9 @@ public class Crawler {
 
                     line = reader.readLine();
 
-                    if (line.length() == 0)
+                    if (line == null || line.length() == 0)
                         break;
+
                     builder.append(line);
                 }
             }
@@ -111,7 +118,7 @@ public class Crawler {
         }
         catch (IOException e) {
 
-            e.printStackTrace();
+            //e.printStackTrace();
         }
 
         return "";
@@ -128,5 +135,10 @@ public class Crawler {
     public void add(String url) {
 
         queue.add(url);
+    }
+
+    public void addCallback(ICrawlerConsumer consumer) {
+
+        consumers.add(consumer);
     }
 }
