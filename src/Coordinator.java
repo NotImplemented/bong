@@ -13,7 +13,7 @@ public class Coordinator {
     private static final String crawlCommand = "crawl";
     private static final int crawlAmount = 4096;
     private static final String queryCommand = "query";
-    private static final int queryAmount = 16;
+    private static final int queryAmount = 8;
     private static final String browseCommand = "browse";
     private static final String infoCommand = "info";
     private static final String exitCommand = "exit";
@@ -25,8 +25,8 @@ public class Coordinator {
     public static void displayHint() {
 
         System.out.println("Available commands are:");
-        System.out.println("\tcrawl <list of roots> [<amount of pages>=" + crawlAmount +"]");
-        System.out.println("\tquery <query> [<display only N top>=" + queryAmount + "]");
+        System.out.println("\tcrawl <list of roots> [<amount of pages> = " + crawlAmount +"]");
+        System.out.println("\tquery <query> [<display only N top> = " + queryAmount + "]");
         System.out.println("\tinfo");
         System.out.println("\tbrowse [<url regular expression>]");
         System.out.println("\texit");
@@ -51,7 +51,7 @@ public class Coordinator {
                 if (command.equals(crawlCommand)) {
 
                     ArrayList<String> roots = new ArrayList<String>();
-                    int amount = Integer.MAX_VALUE;
+                    int amount = crawlAmount;
                     for (int i = 1; i < splitted.length; ++i) {
 
                         if (i == splitted.length - 1 && tryParseInt(splitted[i])) {
@@ -72,7 +72,7 @@ public class Coordinator {
                 else if (command.equals(queryCommand)) {
 
                     StringBuilder query = new StringBuilder();
-                    int amount = Integer.MAX_VALUE;
+                    int amount = queryAmount;
 
                     for(int i = 1; i < splitted.length; ++i) {
 
@@ -86,7 +86,7 @@ public class Coordinator {
 
                     List<Pair<String, Double>> result = find(query.toString(), amount);
 
-                    System.out.println("Query: \"" + query.toString() + "\"" + (amount != Integer.MAX_VALUE ? ("(displaying top " + amount + ")") : "" ) );
+                    System.out.println("Query \"" + query.toString() + "\"" +  " (displaying top " + amount + ")" + ":");
                     System.out.println("\n");
 
                     for (int i = 0; i < result.size(); ++i) {
