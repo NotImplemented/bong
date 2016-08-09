@@ -8,9 +8,9 @@ public class Parser {
     private static ThreadPoolExecutor executor = (ThreadPoolExecutor) Executors.newCachedThreadPool();
 
     private StringBuffer lexeme = new StringBuffer();
-    private StringBuffer head   = new StringBuffer();
+    private StringBuffer title   = new StringBuffer();
     private Boolean insideTag   = false;
-    private Boolean insideHead  = false;
+    private Boolean insideTitle = false;
     private String tagName      = "";
     private String tagAttribute = "";
 
@@ -25,7 +25,14 @@ public class Parser {
 
         return links;
     }
+    public String getTitle()
+    {
+        String[] splitted = title.toString().split("[^a-zA-Z0-9\\-]");
+        if (splitted.length > 0)
+            return splitted[0];
 
+        return "";
+    }
 
     public static void parse(String url, String text, IParserConsumer consumer) {
 
@@ -47,13 +54,13 @@ public class Parser {
 
             if (tagName.startsWith("/")) {
 
-                if (tagName.replaceAll("^/", "") == "HEAD")
-                    insideHead = false;
+                if (tagName.replaceAll("^/", "").toLowerCase().equals("title"))
+                    insideTitle = false;
             }
             else {
 
-                if (tagName == "HEAD")
-                    insideHead = true;
+                if (tagName.toLowerCase().equals("title"))
+                    insideTitle = true;
             }
         }
         else if (tagAttribute.startsWith("href")) {
@@ -67,10 +74,10 @@ public class Parser {
 
         lexeme = lexeme.toLowerCase().replaceAll("[^A-Za-z0-9]", "");
         int l = lexeme.length();
-        if (l < 4 || l > 12)
+        if (l <= 2 || l >= 14)
             return;
 
-        words.add(lexeme.toLowerCase().replaceAll("[^A-Za-z0-9]", ""));
+        words.add(lexeme);
     }
 
     private void parse(String text) {
@@ -83,6 +90,9 @@ public class Parser {
 
                 case '<':
                     insideTag = true;
+
+                    if (insideTitle)
+                        insideTitle = false;
 
                     tagName = tagAttribute = "";
                     lexeme.setLength(0);
@@ -136,11 +146,16 @@ public class Parser {
                 default:
 
                     lexeme.append(c);
-                    if (insideHead)
-                        this.head.append(c);
+                    if (insideTitle)
+                        title.append(c);
 
                     break;
             }
         }
+    }
+
+    public static void stop() {
+
+        executor.shutdown();
     }
 }

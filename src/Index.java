@@ -5,89 +5,149 @@ import java.util.*;
 public class Index {
 
     private static HashMap<String, ArrayList<String>> index = new HashMap<>();
-    //private static HashMap<String, String> names = new HashMap<>();
+    private static HashMap<String, HashMap<String, Integer>> index_frequency = new HashMap<>();
+    private static HashMap<String, Integer> frequency_global = new HashMap<>();
+    private static HashMap<String, String> titles = new HashMap<>();
 
-    public static void append(String url, ArrayList<String> words) {
+    public static void append(String url, String head, ArrayList<String> words) {
+
+        HashMap<String, Integer> frequency = new HashMap<String, Integer>();
+        for(String word : words) {
+
+            if (!frequency.containsKey(word))
+                frequency.put(word, 1);
+            else
+                frequency.replace(word, frequency.get(word)+1);
+        }
+
+        synchronized (titles) {
+            titles.put(url, head);
+        }
 
         synchronized (index) {
-
             index.put(url, words);
+        }
+
+        synchronized (index_frequency) {
+            index_frequency.put(url, frequency);
+        }
+
+        synchronized (frequency_global) {
+
+            for(String word : words) {
+
+                if (!frequency_global.containsKey(word))
+                    frequency_global.put(word, 1);
+                else
+                    frequency_global.replace(word, frequency.get(word)+1);
+            }
         }
     }
 
-    public static ArrayList<Pair<String, Double>> query(String text) {
+    public static List<Pair<String, List<String>>> browse() {
 
-        ArrayList<Pair<String, Double>> result = new ArrayList<>();
+        List<Pair<String, List<String>>> result = new ArrayList<>();
 
         synchronized (index) {
 
-            String[] splitted = text.split("\\s+");
-
             for (Map.Entry<String, ArrayList<String>> entry : index.entrySet()) {
 
-                String key = entry.getKey();
-                ArrayList<String> values = entry.getValue();
-                result.add(new Pair(key, 1.0));
+                result.add(new Pair<>(entry.getKey(), entry.getValue()));
             }
-
-            // Remove it.
-            for (String word : splitted) {
-
-                double tf = tf(word);
-
-                for (int i = 0; i < result.size(); ++i) {
-
-                    double itf = 1 + itf(word, index.get(result.get(i).getKey()));
-
-                    if (!Double.isNaN(tf / itf) && tf > 0) {
-
-                        Double d = result.get(i).getValue();
-                        d *= itf / tf;
-
-                        result.set(i, new Pair(result.get(i).getKey(), d));
-                    }
-                    else {
-
-                        result.set(i, new Pair(result.get(i).getKey(), 0.0));
-                    }
-                }
-            }
-
-            Collections.sort(result, new Comparator<Pair<String, Double>>() {
-                @Override
-                public int compare(Pair<String, Double> apple, Pair<String, Double> banana) {
-
-                    return banana.getValue().compareTo(apple.getValue());
-                }
-            });
 
             return result;
         }
     }
 
-    private static int itf(String word, ArrayList<String> values) {
+    public static List<Pair<String, Double>> query(String text, int amount) {
 
-        int result = 0;
+        text = text.toLowerCase();
 
-        for(String w : values)
-            if (word.equals(w))
-                result++;
+        List<Pair<String, Double>> result = new ArrayList<>();
 
-        return result;
-    }
+        String[] splitted = text.split("\\s+");
 
-    private static int tf(String word) {
+        synchronized (index) {
 
-        int result = 0;
-        for (Map.Entry<String, ArrayList<String>> entry : index.entrySet()) {
-            //String key = entry.getKey();
-            ArrayList<String> values = entry.getValue();
+            int N = index.size();
 
-            for(String w : values)
-                if (word.equals(w))
-                    result++;
+            for (Map.Entry<String, ArrayList<String>> entry : index.entrySet()) {
+
+                double relevance = 0;
+                String url = entry.getKey();
+
+                for (String word : splitted) {
+
+                    double tf = term_frequency(word, url);
+                    double idf = document_frequency(word);
+
+                    double d = tf * Math.log(N / (idf + 1));
+
+                    relevance += d;
+                }
+
+                result.add(new Pair<>(url, relevance));
+            }
+        }
+
+        // TODO: Apply selection algorithm generally or use heap to select top.
+        Collections.sort(result, new Comparator<Pair<String, Double>>() {
+            @Override
+            public int compare(Pair<String, Double> apple, Pair<String, Double> banana) {
+
+                return banana.getValue().compareTo(apple.getValue());
+            }
+        });
+
+        if (result.size() > amount) {
+            result = result.subList(0, amount-1);
         }
 
         return result;
+
+    }
+
+    public static String getTitle(String url) {
+
+        synchronized (titles) {
+
+            return titles.get(url);
+        }
+    }
+
+    public static int getSize() {
+
+        synchronized (index) {
+
+            return index.size();
+        }
+    }
+
+    private static int document_frequency(String word) {
+
+        synchronized (index) {
+
+            Integer frequency = frequency_global.get(word);
+            if (frequency == null)
+                return 0;
+
+            return frequency;
+        }
+    }
+
+    private static int term_frequency(String word, String url) {
+
+        synchronized (index) {
+
+            HashMap<String, Integer> frequency_info = index_frequency.get(url);
+            if (frequency_info == null)
+                return 0;
+
+            Integer frequency = frequency_info.get(word);
+            if (frequency == null)
+                return 0;
+
+            return frequency;
+        }
     }
 }

@@ -50,6 +50,7 @@ public class Crawler {
                 break;
             }
         }
+
     }
 
     private String crawl(String url) {
