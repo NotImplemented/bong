@@ -4,137 +4,121 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Queue;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class Crawler {
 
-    private BlockingQueue<String> queue = new LinkedBlockingQueue<>();
-    private AtomicReference<Thread> t = new AtomicReference<>();
+    private static ThreadPoolExecutor executor = null;
     private ArrayList<ICrawlerConsumer> consumers = new ArrayList<>();
+    private AtomicReference<Thread> t = null;
+    private final int threads;
+
+    public Crawler(int threads) {
+
+        this.threads = threads;
+    }
 
     public void start() {
 
-        if (t.get() != null)
+        if (executor != null)
             return;
 
-        t = new AtomicReference<>(new Thread(this::workingThread));
-        t.get().start();
+        executor = (ThreadPoolExecutor) Executors.newFixedThreadPool(threads);
     }
 
-    private void workingThread() {
+    private void crawl(final Crawler crawler, final String url) {
 
-        while (true) {
+        executor.execute(new Runnable() {
+            @Override
+            public void run() {
 
-            try {
+                try {
 
-                String url = queue.take();
-                String result = crawl(url);
+                    URL resource = new URL(url);
+                    HttpURLConnection connection;
+                    String location;
 
-                if (result.length() > 0) {
+                    while (true) {
 
-                    for(ICrawlerConsumer consumer : consumers)
-                        consumer.onPageDownload(this, url, result);
-                }
-            }
-            catch (InterruptedException e) {
+                        connection = (HttpURLConnection) resource.openConnection();
+                        if (connection == null)
+                            break;
 
-                break;
-            }
-            catch (Exception e) {
+                        connection.setInstanceFollowRedirects(false);
+                        switch (connection.getResponseCode()) {
+                            case HttpURLConnection.HTTP_MOVED_PERM:
+                            case HttpURLConnection.HTTP_MOVED_TEMP:
+                                location = connection.getHeaderField("Location");
 
-                e.printStackTrace();
-                break;
-            }
-        }
-    }
+                                //resource = new URL(resource, location);
+                                URL next = new URL(resource, location);
+                                resource = new URL(next.toExternalForm());
 
-    private String crawl(String url) {
+                                continue;
+                        }
 
-        URL resource, current, next;
-        HttpURLConnection connection = null;
-        String location;
-
-        while (true)
-        {
-            try {
-
-                resource = new URL(url);
-                connection = (HttpURLConnection)resource.openConnection();
-                if (connection == null)
-                    break;
-
-                connection.setInstanceFollowRedirects(false);
-                switch (connection.getResponseCode())
-                {
-                    case HttpURLConnection.HTTP_MOVED_PERM:
-                    case HttpURLConnection.HTTP_MOVED_TEMP:
-                        location = connection.getHeaderField("Location");
-                        current = new URL(url);
-                        next = new URL(current, location);
-                        url = next.toExternalForm();
-                        continue;
-                }
-            }
-            catch (MalformedURLException e) {
-
-                //e.printStackTrace();
-            }
-            catch (IOException e) {
-
-                //e.printStackTrace();
-                // Suppress this from flooding console.
-            }
-
-            break;
-        }
-
-        if (connection == null)
-            return "";
-
-        try {
-
-            InputStream input = connection.getInputStream();
-            StringBuffer builder = new StringBuffer();
-
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(input))) {
-                String line = "";
-
-                while(true) {
-
-                    line = reader.readLine();
-
-                    if (line == null || line.length() == 0)
                         break;
+                    }
 
-                    builder.append(line);
+                    if (connection == null)
+                        return;
+
+                    if (crawler.stopped())
+                        return;
+
+                    InputStream input = connection.getInputStream();
+                    StringBuffer builder = new StringBuffer();
+
+                    try (BufferedReader reader = new BufferedReader(new InputStreamReader(input))) {
+                        String line;
+
+                        while(true) {
+
+                            line = reader.readLine();
+
+                            if (line == null || line.length() == 0)
+                                break;
+
+                            builder.append(line);
+                        }
+                    }
+
+                    if (builder.length() > 0) {
+
+                        for (ICrawlerConsumer consumer : consumers)
+                            consumer.onPageDownload(crawler, url, builder.toString());
+                    }
+                }
+                catch (MalformedURLException e) {
+
+                    e.printStackTrace();
+                }
+                catch (IOException e) {
+
+                    // Suppress this from flooding console.
                 }
             }
 
-            return builder.toString();
-        }
-        catch (IOException e) {
-
-            //e.printStackTrace();
-        }
-
-        return "";
+        });
     }
 
     public void stop() {
 
-        if (t.get() == null)
-            return;
+        executor.getQueue().clear();
+        executor.shutdown();
 
-        t.get().interrupt();
+    }
+
+    public boolean stopped() {
+
+        return executor.isTerminating() || executor.isTerminated();
     }
 
     public void add(String url) {
 
-        queue.add(url);
+        crawl(this, url);
     }
 
     public void addCallback(ICrawlerConsumer consumer) {
